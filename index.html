@@ -1,0 +1,520 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CITIZEN // Pre‑Crime Hotspot Scanner</title>
+  <style>
+    :root{
+      --bg:#000000;
+      --grid:#150000;
+      --neon:#ff2a2a;
+      --neon-dim:#a81818;
+      --text:#ffdbdb;
+      --ok:#31f7a5;
+      --warn:#ffb347;
+      --bad:#ff2a2a;
+      --scanline: rgba(255,42,42,0.06);
+    }
+    @font-face{font-family:CRT;src:local("SF Mono"),local("Menlo"),local("Consolas");}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:CRT,ui-monospace,Menlo,Consolas,monospace;}
+    .crt{position:relative;min-height:100vh;overflow:hidden;}
+    /* wire grid */
+    .crt::before{content:"";position:fixed;inset:0;background:
+      linear-gradient(transparent 31px, var(--grid) 32px),
+      linear-gradient(90deg, transparent 31px, var(--grid) 32px);
+      background-size:32px 32px,32px 32px;opacity:.4;pointer-events:none;}
+    /* scanlines */
+    .crt::after{content:"";position:fixed;inset:0;background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 2px, transparent 3px),
+      linear-gradient(0deg, transparent 0, var(--scanline) 2%, transparent 4%);
+      mix-blend-mode:overlay;opacity:.45;pointer-events:none;}
+    header{padding:18px 20px;border-bottom:1px solid var(--neon-dim);text-shadow:0 0 8px var(--neon);letter-spacing:.08em}
+    header .brand{display:flex;gap:12px;align-items:center}
+    .brand .led{width:10px;height:10px;background:var(--neon);box-shadow:0 0 8px var(--neon),0 0 20px var(--neon);border-radius:2px}
+    .brand h1{margin:0;font-size:16px;color:var(--neon)}
+    .sub{color:var(--text);opacity:.75;font-size:12px}.bar{display:flex;gap:8px;align-items:center;padding:14px 20px;border-bottom:1px dashed var(--neon-dim)}
+.bar input{flex:1;background:#0a0000;border:1px solid var(--neon-dim);color:var(--text);padding:12px 12px;border-radius:6px;outline:none;caret-color:var(--neon);box-shadow:inset 0 0 12px rgba(255,42,42,.2)}
+.bar button{background:#0a0000;border:1px solid var(--neon);color:var(--neon);padding:10px 14px;border-radius:6px;cursor:pointer;text-shadow:0 0 6px var(--neon);box-shadow:0 0 10px rgba(255,42,42,.3) inset}
+.bar button:hover{filter:brightness(1.2)}
+.bar .kbd{font-size:12px;opacity:.7;border:1px solid var(--neon-dim);padding:2px 6px;border-radius:4px}
+
+.grid{display:grid;grid-template-columns: 1.1fr .9fr;gap:14px;padding:14px 14px 90px}
+.panel{background:#070000cc;border:1px solid var(--neon-dim);border-radius:12px;box-shadow:0 0 24px rgba(255,42,42,.12);} 
+.panel h2{margin:0;padding:12px 14px;color:var(--neon);border-bottom:1px dashed var(--neon-dim);font-size:14px}
+.panel .body{padding:12px 14px}
+
+.map-wrap{position:relative;height:420px}
+.map{position:absolute;inset:0;border:0;width:100%;height:100%;filter:contrast(1.05) saturate(0.9) hue-rotate(-5deg)}
+.overlay{position:absolute;inset:0;pointer-events:none}
+.reticule{position:absolute;left:50%;top:50%;width:120px;height:120px;border:1px dashed var(--neon-dim);transform:translate(-50%,-50%);box-shadow:0 0 8px rgba(255,42,42,.2)}
+
+.row{display:flex;gap:10px;align-items:center}
+.risk-item{display:grid;grid-template-columns:auto 1fr auto;gap:8px;padding:10px;border-bottom:1px dashed #2a0000}
+.risk-item:last-child{border-bottom:0}
+.risk-badge{color:#fff;background:linear-gradient(180deg, #2a0000, #5a0000);border:1px solid var(--neon-dim);padding:6px 8px;border-radius:8px;min-width:82px;text-align:center}
+.risk-bar{height:10px;border:1px solid var(--neon-dim);border-radius:999px;overflow:hidden;box-shadow:inset 0 0 8px rgba(255,42,42,.25)}
+.risk-bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,#5a0000,#ff2a2a);box-shadow:0 0 12px var(--neon)}
+.meta{font-size:11px;opacity:.8}
+
+.pill{border:1px solid var(--neon-dim);color:var(--text);padding:4px 8px;border-radius:999px;font-size:11px}
+.legend{display:flex;gap:8px;flex-wrap:wrap}
+
+.console{max-height:140px;overflow:auto;font-size:12px;background:#050000;border-radius:8px;border:1px solid #2a0000;padding:10px}
+.console .ts{color:#ff8c8c}
+
+.foot{position:fixed;left:0;right:0;bottom:0;border-top:1px dashed var(--neon-dim);background:#050000e6;backdrop-filter:blur(4px);display:flex;justify-content:space-between;align-items:center;padding:10px 14px;font-size:12px}
+.foot small{opacity:.8}
+
+/* modal */
+dialog{border:1px solid var(--neon-dim);background:#070000;color:var(--text);border-radius:12px;box-shadow:0 0 40px rgba(255,42,42,.18)}
+dialog::backdrop{background:#0009}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field input, .field select{background:#0a0000;border:1px solid var(--neon-dim);color:var(--text);padding:10px;border-radius:6px}
+
+@media (max-width: 980px){
+  .grid{grid-template-columns:1fr}
+  .map-wrap{height:300px}
+}
+
+  </style>
+</head>
+<body>
+  <div class="crt">
+    <header>
+      <div class="brand">
+        <div class="led"></div>
+        <h1>CITIZEN // PRE‑CRIME HOTSPOT SCANNER</h1>
+      </div>
+      <div class="sub">Retro‑CRT wire interface. Enter a city; we triangulate public crime feeds + news chatter, compute risk by category, and visualize hotspots.</div>
+    </header><div class="bar">
+  <input id="q" placeholder="Enter city, country — e.g., London, UK / Chicago, US / Toronto, CA" />
+  <button id="scan">SCAN</button>
+  <button id="cfg">⚙︎</button>
+  <span class="kbd">↵ Enter</span>
+</div>
+
+<main class="grid">
+  <section class="panel">
+    <h2>Map // Hotspot Reticule</h2>
+    <div class="body map-wrap">
+      <iframe id="map" class="map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+      <div class="overlay">
+        <div class="reticule"></div>
+      </div>
+    </div>
+    <div class="body">
+      <div class="legend">
+        <span class="pill">Data sources: <span id="sourcesCount">0</span></span>
+        <span class="pill">Confidence: <span id="confidence">0%</span></span>
+        <span class="pill">Window: <span id="windowLabel">last 30 days</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Potential Criminal Possibilities // Ranked</h2>
+    <div class="body" id="results"></div>
+  </section>
+
+  <section class="panel" style="grid-column:1/-1">
+    <h2>Transparent Method // Readout</h2>
+    <div class="body">
+      <p style="margin-top:0">Risk score = Likelihood × Severity × Confidence. Likelihood derives from recent local reports and public chatter; Severity is a weighted harm index by category; Confidence reflects source quality & agreement. Predictions are probabilistic, not destiny.</p>
+      <div class="grid2">
+        <div>
+          <h3 style="color:var(--neon);font-size:13px;margin:10px 0">Severity Weights</h3>
+          <div class="legend" id="severityLegend"></div>
+        </div>
+        <div>
+          <h3 style="color:var(--neon);font-size:13px;margin:10px 0">Attribution</h3>
+          <div class="console" id="console"></div>
+        </div>
+      </div>
+      <p class="meta" style="margin-top:10px">Ethics: This UI is for public awareness. Do not target individuals. Models can inherit bias; always cross‑check. See settings for data provenance & toggles.</p>
+    </div>
+  </section>
+</main>
+
+<div class="foot">
+  <small>© CITIZEN — client‑side prototype. Uses open data where available. No personal data processed.</small>
+  <div>
+    <small>Demo Mode engages when APIs unavailable.</small>
+  </div>
+</div>
+
+  </div>  <!-- Settings Modal -->  <dialog id="modal">
+    <form method="dialog">
+      <h3 style="margin:0 0 10px;color:var(--neon)">Settings // Data Sources</h3>
+      <div class="grid2">
+        <div class="field">
+          <label>CrimeoMeter API Key (US & Intl)</label>
+          <input id="crimeometerKey" placeholder="sk_..."/>
+        </div>
+        <div class="field">
+          <label>NewsAPI.org Key (global news chatter)</label>
+          <input id="newsapiKey" placeholder="YOUR_NEWSAPI_KEY"/>
+        </div>
+        <div class="field">
+          <label>GNews.io Key (alt news chatter)</label>
+          <input id="gnewsKey" placeholder="YOUR_GNEWS_KEY"/>
+        </div>
+        <div class="field">
+          <label>Time Window</label>
+          <select id="window">
+            <option value="14">Last 14 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="60">Last 60 days</option>
+          </select>
+        </div>
+      </div>
+      <p class="meta" style="margin-top:8px">Open data integrations (no key needed): <b>OpenStreetMap Nominatim</b> for geocoding; <b>data.police.uk</b> for England/Wales street‑level crime. Others require keys and are optional. Keys are stored locally in your browser only.</p>
+      <menu style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="saveCfg">Save</button>
+        <button>Close</button>
+      </menu>
+    </form>
+  </dialog>  <script>
+    // ------------------ Config & Constants ------------------
+    const $ = (q)=>document.querySelector(q);
+    const log = (msg)=>{
+      const ts = new Date().toLocaleTimeString();
+      $('#console').insertAdjacentHTML('afterbegin', `<div><span class="ts">[${ts}]</span> ${msg}</div>`);
+    }
+
+    const CONFIG = {
+      get crimeometer(){ return localStorage.getItem('citizen_crimeometer')||'';},
+      set crimeometer(v){ localStorage.setItem('citizen_crimeometer', v||'');},
+      get newsapi(){ return localStorage.getItem('citizen_newsapi')||'';},
+      set newsapi(v){ localStorage.setItem('citizen_newsapi', v||'');},
+      get gnews(){ return localStorage.getItem('citizen_gnews')||'';},
+      set gnews(v){ localStorage.setItem('citizen_gnews', v||'');},
+      get windowDays(){ return +(localStorage.getItem('citizen_window')||30);},
+      set windowDays(v){ localStorage.setItem('citizen_window', v); }
+    }
+
+    // ICCS‑inspired categories with severity weights
+    const CATEGORIES = {
+      'homicide': {label:'Homicide', weight: 1.00},
+      'violent': {label:'Assault/Violent', weight: 0.90},
+      'robbery': {label:'Robbery', weight: 0.70},
+      'theft': {label:'Theft/Burglary', weight: 0.40},
+      'weapons': {label:'Weapons', weight: 0.65},
+      'narcotics': {label:'Narcotics', weight: 0.50},
+      'property': {label:'Property Damage/Arson', weight: 0.30},
+      'public': {label:'Public Order/Disorder', weight: 0.20},
+      'fraud': {label:'Fraud/Scams', weight: 0.45},
+      'cyber': {label:'Cybercrime', weight: 0.45}
+    };
+
+    // UK Police API category mapping -> our categories
+    const UK_MAP = {
+      'violent-crime':'violent',
+      'robbery':'robbery',
+      'possession-of-weapons':'weapons',
+      'burglary':'theft',
+      'other-theft':'theft',
+      'shoplifting':'theft',
+      'bicycle-theft':'theft',
+      'theft-from-the-person':'theft',
+      'vehicle-crime':'theft',
+      'criminal-damage-arson':'property',
+      'drugs':'narcotics',
+      'public-order':'public',
+      'anti-social-behaviour':'public',
+      'other-crime':'public'
+    };
+
+    const DEMO = {
+      center:{ lat:51.5074, lon:-0.1278, label:'London, UK' },
+      sources:['data.police.uk (demo set)','Synthetic chatter'],
+      items:[
+        {key:'violent', count:182, hotspots:['Soho','Elephant & Castle','Hackney Central']},
+        {key:'theft', count:516, hotspots:['Oxford Circus','King\'s Cross','Camden Lock']},
+        {key:'robbery', count:74, hotspots:['Bank','Peckham']},
+        {key:'property', count:203, hotspots:['Shoreditch','Croydon']},
+        {key:'narcotics', count:111, hotspots:['Brixton','Dalston']}
+      ],
+      confidence:.78
+    };
+
+    // Render severity legend
+    (function(){
+      const el = document.getElementById('severityLegend');
+      Object.entries(CATEGORIES).forEach(([k,v])=>{
+        const w = Math.round(v.weight*100);
+        el.insertAdjacentHTML('beforeend', `<span class="pill">${v.label}: <b>${w}</b></span>`)
+      })
+    })();
+
+    // ------------------ Utilities ------------------
+    function daysAgo(n){
+      const d = new Date();
+      d.setDate(d.getDate()-n);
+      return d;
+    }
+    function fmtDateISO(d){ return d.toISOString().slice(0,19)+"Z" }
+
+    function setMap(center){
+      const {lat, lon} = center;
+      const bbox = [lon-0.08, center.lat-0.05, lon+0.08, center.lat+0.05].join(',');
+      const url = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lon}`;
+      const frame = document.getElementById('map');
+      frame.src = url;
+    }
+
+    function setBadges(sources, confidence){
+      document.getElementById('sourcesCount').textContent = sources.length;
+      document.getElementById('confidence').textContent = Math.round(confidence*100)+"%";
+      document.getElementById('windowLabel').textContent = `last ${CONFIG.windowDays} days`;
+    }
+
+    function renderList(list){
+      const root = document.getElementById('results');
+      root.innerHTML = '';
+      list.forEach(item=>{
+        const cat = CATEGORIES[item.key];
+        const score = Math.min(100, Math.round(item.risk));
+        const conf = Math.round(item.confidence*100);
+        const color = score>75? 'var(--bad)' : score>50? 'var(--warn)': 'var(--ok)';
+        const hotspots = (item.hotspots||[]).slice(0,3).join(' • ');
+        root.insertAdjacentHTML('beforeend', `
+          <div class="risk-item">
+            <div class="risk-badge">${cat.label}</div>
+            <div>
+              <div class="risk-bar"><i style="width:${score}%; background:linear-gradient(90deg,#5a0000, ${color})"></i></div>
+              <div class="meta">Risk ${score}/100 · Confidence ${conf}% ${hotspots? '· Hotspots: '+hotspots:''}</div>
+            </div>
+            <div style="align-self:center">⟶</div>
+          </div>
+        `);
+      })
+    }
+
+    function synthesizeRisk(counts, sourcesQuality){
+      // Likelihood from normalized counts; Confidence from sourcesQuality; Risk = L * Severity * C * 100
+      const total = Object.values(counts).reduce((a,b)=>a+b,0) || 1;
+      const out = [];
+      for(const k of Object.keys(CATEGORIES)){
+        const n = counts[k]||0;
+        const likelihood = Math.min(1, n / (total*0.6));
+        const confidence = sourcesQuality; // 0..1
+        const severity = CATEGORIES[k].weight; // 0..1
+        out.push({key:k, risk: 100*likelihood*severity*confidence, confidence, hotspots:counts[`${k}__hotspots`]||[]});
+      }
+      // rank
+      out.sort((a,b)=>b.risk-a.risk);
+      return out.filter(x=>x.risk>2);
+    }
+
+    // ------------------ Data Providers ------------------
+    async function geocode(city){
+      log(`Geocoding → ${city}`);
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`;
+      const r = await fetch(url, {headers:{'Accept':'application/json'}});
+      if(!r.ok) throw new Error('Geocoding failed');
+      const j = await r.json();
+      if(!j[0]) throw new Error('No geocode result');
+      const best = j[0];
+      const label = best.display_name.split(',').slice(0,3).join(', ');
+      return {lat:+best.lat, lon:+best.lon, label, raw:best};
+    }
+
+    async function ukPoliceCounts(center, days){
+      // Fetch current month and previous month to gauge recency
+      const now = new Date();
+      const monthStr = (d)=> d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0');
+      const thisMonth = monthStr(now);
+      const lastMonth = monthStr(new Date(now.getFullYear(), now.getMonth()-1, 1));
+      const mk = async (m)=>{
+        const url = `https://data.police.uk/api/crimes-street/all-crime?lat=${center.lat}&lng=${center.lon}&date=${m}`;
+        log(`UK Police: ${m}`);
+        const r = await fetch(url);
+        if(!r.ok) throw new Error('UK Police API error');
+        return r.json();
+      }
+      const [a,b] = await Promise.allSettled([mk(thisMonth), mk(lastMonth)]);
+      const rows = (a.value||[]).concat(b.value||[]);
+      const counts = {};
+      const hotspotMap = {};
+      for(const row of rows){
+        const mapKey = UK_MAP[row.category];
+        if(!mapKey) continue;
+        counts[mapKey] = (counts[mapKey]||0)+1;
+        const name = row.location && row.location.street && row.location.street.name || null;
+        if(name){
+          hotspotMap[mapKey] = hotspotMap[mapKey]||{};
+          hotspotMap[mapKey][name] = (hotspotMap[mapKey][name]||0)+1;
+        }
+      }
+      // top hotspots
+      for(const k of Object.keys(hotspotMap)){
+        const arr = Object.entries(hotspotMap[k]).sort((a,b)=>b[1]-a[1]).slice(0,5).map(x=>x[0]);
+        counts[k+'__hotspots'] = arr;
+      }
+      return {counts, confidence:.9, source:'data.police.uk'};
+    }
+
+    async function crimeometerCounts(center, days){
+      if(!CONFIG.crimeometer) return null;
+      const end = new Date();
+      const start = daysAgo(days);
+      const endpoint = 'https://api.crimeometer.com/v1/incidents/raw-data';
+      const params = new URLSearchParams({
+        lat:center.lat, lon:center.lon, distance:'10mi',
+        datetime_ini: fmtDateISO(start), datetime_end: fmtDateISO(end)
+      });
+      const url = `${endpoint}?${params.toString()}`;
+      log('CrimeoMeter query initiated');
+      const r = await fetch(url, {headers:{'x-api-key': CONFIG.crimeometer}});
+      if(!r.ok) throw new Error('CrimeoMeter error');
+      const j = await r.json();
+      const counts = {};
+      const hs = {};
+      for(const it of j.incidents||[]){
+        const type = (it.incident_offense || '').toLowerCase();
+        const mk = (key)=>{ counts[key]=(counts[key]||0)+1 }; 
+        if(/homicide|murder/.test(type)) mk('homicide');
+        else if(/assault|battery/.test(type)) mk('violent');
+        else if(/robbery/.test(type)) mk('robbery');
+        else if(/weapon|firearm/.test(type)) mk('weapons');
+        else if(/burglary|theft|larceny|shoplifting|vehicle/.test(type)) mk('theft');
+        else if(/narcotic|drug/.test(type)) mk('narcotics');
+        else if(/arson|vandal|damage/.test(type)) mk('property');
+        else if(/fraud|scam|identity/.test(type)) mk('fraud');
+        const n = it.incident_address || it.incident_offense || '';
+        const key = Object.keys(CATEGORIES).find(k=>counts[k] && type.includes(k)) || null;
+        if(key && n){ hs[key]=hs[key]||{}; hs[key][n]=(hs[key][n]||0)+1; }
+      }
+      for(const k of Object.keys(hs)){
+        const arr = Object.entries(hs[k]).sort((a,b)=>b[1]-a[1]).slice(0,5).map(x=>x[0]);
+        counts[k+'__hotspots']=arr;
+      }
+      return {counts, confidence:.75, source:'crimeometer'};
+    }
+
+    async function newsCounts(city, days){
+      // NewsAPI or GNews as chatter proxy
+      const q = encodeURIComponent(`${city} (crime OR robbery OR assault OR burglary OR theft OR shooting OR stabbing OR arson OR scam)`);
+      const since = daysAgo(days).toISOString().slice(0,10);
+      let items = [];
+      if(CONFIG.newsapi){
+        const url = `https://newsapi.org/v2/everything?q=${q}&from=${since}&sortBy=publishedAt&language=en&pageSize=50`;
+        log('NewsAPI query initiated');
+        const r = await fetch(url,{headers:{'X-Api-Key':CONFIG.newsapi}});
+        if(r.ok){ const j = await r.json(); items = items.concat(j.articles||[]); }
+      }
+      if(CONFIG.gnews){
+        const url = `https://gnews.io/api/v4/search?q=${q}&from=${since}&lang=en&max=50&sortby=publishedAt&apikey=${CONFIG.gnews}`;
+        log('GNews query initiated');
+        const r = await fetch(url);
+        if(r.ok){ const j = await r.json(); items = items.concat(j.articles||[]); }
+      }
+      const counts = {};
+      const hs = {};
+      const add=(k)=>counts[k]=(counts[k]||0)+1;
+      for(const a of items){
+        const text = (a.title+" "+(a.description||'')).toLowerCase();
+        if(/homicide|murder|killed|fatal shooting/.test(text)) add('homicide');
+        if(/assault|stabbing|shooting|battery/.test(text)) add('violent');
+        if(/robbery|carjacking|mugging/.test(text)) add('robbery');
+        if(/weapon|firearm/.test(text)) add('weapons');
+        if(/burglary|break-in|shoplifting|theft|larceny|pickpocket/.test(text)) add('theft');
+        if(/drug|narcotic|opioid|cocaine|heroin|meth/.test(text)) add('narcotics');
+        if(/arson|vandalism|graffiti/.test(text)) add('property');
+        if(/fraud|scam|phishing|identity theft/.test(text)) add('fraud');
+        if(/cyber|ransomware|hacker|data breach/.test(text)) add('cyber');
+        // treat source name as coarse hotspot proxy
+        const key = Object.keys(CATEGORIES).find(k=>text.includes(k)) || null;
+        if(key && a.source && a.source.name){ hs[key]=hs[key]||{}; hs[key][a.source.name]=(hs[key][a.source.name]||0)+1; }
+      }
+      for(const k of Object.keys(hs)){
+        const arr = Object.entries(hs[k]).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]);
+        counts[k+'__hotspots']=arr;
+      }
+      if(Object.keys(counts).length===0) return null;
+      // Chatter is noisier; lower confidence
+      return {counts, confidence:.45, source:'news'};
+    }
+
+    function mergeCounts(parts){
+      const counts = {};
+      let confidence = 0; let denom = 0; const sources=[];
+      for(const p of parts){
+        if(!p) continue;
+        sources.push(p.source);
+        confidence += p.confidence; denom++;
+        for(const [k,v] of Object.entries(p.counts)){
+          counts[k] = (counts[k]||0) + v;
+        }
+      }
+      return {counts, confidence: denom? confidence/denom : .3, sources};
+    }
+
+    async function scanCity(city){
+      try{
+        const center = await geocode(city);
+        setMap(center);
+        log(`Center → ${center.label} (${center.lat.toFixed(4)}, ${center.lon.toFixed(4)})`);
+        const days = CONFIG.windowDays;
+        const parts = [];
+        // Heuristic: If in England/Wales (osm 'display_name' includes 'England'/'Wales'), hit UK police
+        const dn = (center.raw.display_name||'').toLowerCase();
+        if(/england|wales/.test(dn)){
+          try{ parts.push(await ukPoliceCounts(center, days)); }catch(e){ log('UK Police fetch failed'); }
+        }
+        try{ const cm = await crimeometerCounts(center, days); if(cm) parts.push(cm);}catch(e){ log('CrimeoMeter fetch failed'); }
+        try{ const nw = await newsCounts(city, days); if(nw) parts.push(nw);}catch(e){ log('News fetch failed'); }
+
+        let merged;
+        if(parts.length===0){
+          log('No live sources available — DEMO MODE engaged.');
+          setMap(DEMO.center);
+          merged = {counts:{}, confidence: DEMO.confidence, sources: DEMO.sources};
+          DEMO.items.forEach(it=>{ merged.counts[it.key]=(merged.counts[it.key]||0)+it.count; merged.counts[it.key+'__hotspots']=it.hotspots; });
+        } else {
+          merged = mergeCounts(parts);
+        }
+
+        setBadges(merged.sources, merged.confidence);
+        const list = synthesizeRisk(merged.counts, merged.confidence);
+        renderList(list);
+      } catch(err){
+        log('Scan failed: '+err.message);
+        setBadges(['demo-fallback'], .5);
+        setMap(DEMO.center);
+        const list = synthesizeRisk(Object.fromEntries(DEMO.items.map(x=>[x.key,x.count])), .5);
+        renderList(list);
+      }
+    }
+
+    // ------------------ Events ------------------
+    document.getElementById('scan').addEventListener('click', ()=>{
+      const city = document.getElementById('q').value.trim();
+      if(!city) return;
+      scanCity(city);
+    });
+    document.getElementById('q').addEventListener('keydown', (e)=>{
+      if(e.key==='Enter'){ e.preventDefault(); document.getElementById('scan').click(); }
+    });
+
+    const modal = document.getElementById('modal');
+    document.getElementById('cfg').addEventListener('click', ()=>{
+      document.getElementById('crimeometerKey').value = CONFIG.crimeometer;
+      document.getElementById('newsapiKey').value = CONFIG.newsapi;
+      document.getElementById('gnewsKey').value = CONFIG.gnews;
+      document.getElementById('window').value = String(CONFIG.windowDays);
+      modal.showModal();
+    });
+    document.getElementById('saveCfg').addEventListener('click', ()=>{
+      CONFIG.crimeometer = document.getElementById('crimeometerKey').value.trim();
+      CONFIG.newsapi = document.getElementById('newsapiKey').value.trim();
+      CONFIG.gnews = document.getElementById('gnewsKey').value.trim();
+      CONFIG.windowDays = +document.getElementById('window').value;
+      document.getElementById('windowLabel').textContent = `last ${CONFIG.windowDays} days`;
+    });
+
+    // Initial
+    (function(){ setMap({lat:40.7128, lon:-74.0060}); renderList(synthesizeRisk({}, .3)); })();
+  </script></body>
+</html>
